@@ -803,12 +803,6 @@ body.dark-mode .sw.lift { background: #3b82f6; }
   text-anchor: middle;
 }
 
-.svg-inner-court {
-  fill: var(--inner-block);
-  stroke: var(--inner-block-stroke);
-  stroke-width: 1;
-}
-
 .svg-stair-box {
   fill: var(--stair-fill);
   stroke: var(--map-frame);

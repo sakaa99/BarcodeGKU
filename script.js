@@ -48,6 +48,7 @@
       const y = 30;
       const w = 50;
       const h = 70;
+      const lewat = urut - 1;
       return {
         urut, x, y, w, h,
         cx: x + w / 2,
@@ -55,8 +56,10 @@
         doorX: x + w / 2,
         doorY: y + h + 14,
         sisi: "atas-kiri",
+        via: "atas",
         kiri: true,
-        jarakMeter: 6 + (6 - idxFromLeft) * 2
+        lewat,
+        jarakMeter: 4 + urut * 2
       };
     }
     // 07-14: Samping Kiri (07 paling atas, 14 paling bawah)
@@ -66,6 +69,8 @@
       const y = 110 + idx * 42.5;
       const w = 85;
       const h = 42.5;
+      const viaAtas = urut <= 10;
+      const lewat = viaAtas ? (urut - 7) : (14 - urut);
       return {
         urut, x, y, w, h,
         cx: x + w / 2,
@@ -73,8 +78,10 @@
         doorX: x + w + 16,
         doorY: y + h / 2,
         sisi: "samping-kiri",
+        via: viaAtas ? "atas" : "bawah",
         kiri: true,
-        jarakMeter: 12
+        lewat,
+        jarakMeter: 18 + lewat * 3
       };
     }
     // 15-20: Bawah Kiri (15 dekat Tangga Kiri Bawah, 20 dekat Lobi Lift)
@@ -84,6 +91,7 @@
       const y = 460;
       const w = 50;
       const h = 70;
+      const lewat = 20 - urut;
       return {
         urut, x, y, w, h,
         cx: x + w / 2,
@@ -91,8 +99,10 @@
         doorX: x + w / 2,
         doorY: y - 14,
         sisi: "bawah-kiri",
+        via: "bawah",
         kiri: true,
-        jarakMeter: 6 + (6 - idx) * 2
+        lewat,
+        jarakMeter: 4 + (lewat + 1) * 2
       };
     }
     // 21-26: Atas Kanan (21 dekat Lobi Lift, 26 dekat Tangga Kanan Atas)
@@ -102,6 +112,7 @@
       const y = 30;
       const w = 50;
       const h = 70;
+      const lewat = urut - 21;
       return {
         urut, x, y, w, h,
         cx: x + w / 2,
@@ -109,8 +120,10 @@
         doorX: x + w / 2,
         doorY: y + h + 14,
         sisi: "atas-kanan",
+        via: "atas",
         kiri: false,
-        jarakMeter: 6 + (idx + 1) * 2
+        lewat,
+        jarakMeter: 4 + (idx + 1) * 2
       };
     }
     // 27-34: Samping Kanan (27 paling atas, 34 paling bawah)
@@ -120,6 +133,8 @@
       const y = 110 + idx * 42.5;
       const w = 85;
       const h = 42.5;
+      const viaAtas = urut <= 30;
+      const lewat = viaAtas ? (urut - 27) : (34 - urut);
       return {
         urut, x, y, w, h,
         cx: x + w / 2,
@@ -127,8 +142,10 @@
         doorX: x - 16,
         doorY: y + h / 2,
         sisi: "samping-kanan",
+        via: viaAtas ? "atas" : "bawah",
         kiri: false,
-        jarakMeter: 12
+        lewat,
+        jarakMeter: 18 + lewat * 3
       };
     }
     // 35-40: Bawah Kanan (40 dekat Lobi Lift, 35 dekat Tangga Kanan Bawah)
@@ -137,6 +154,7 @@
     const y = 460;
     const w = 50;
     const h = 70;
+    const lewat = 40 - urut;
     return {
       urut, x, y, w, h,
       cx: x + w / 2,
@@ -144,130 +162,152 @@
       doorX: x + w / 2,
       doorY: y - 14,
       sisi: "bawah-kanan",
+      via: "bawah",
       kiri: false,
-      jarakMeter: 6 + (idxFromRight + 1) * 2
+      lewat,
+      jarakMeter: 4 + (idxFromRight + 1) * 2
     };
   }
 
-  /* Buat titik-titik jalur (waypoints) dari Lift ke pintu ruangan */
+  /* Buat titik-titik jalur (waypoints) dari Lift melewati koridor atas/bawah ke pintu ruangan */
   function buildRoutePoints(urut) {
     const g = getRoomGeometry(urut);
-    // Titik awal dari lingkaran biru "Anda di sini" di dalam LIFT
-    const startX = 500;
-    const startY = 282;
+    const liftCenterX = 500;
+    const topCorridorY = 128;
+    const bottomCorridorY = 432;
+    const leftCorridorX = 160;
+    const rightCorridorX = 840;
 
+    // Ruangan di koridor atas (01-06 & 21-26)
+    if (g.sisi === "atas-kiri" || g.sisi === "atas-kanan") {
+      return [
+        [liftCenterX, 205],
+        [liftCenterX, topCorridorY],
+        [g.doorX, topCorridorY],
+        [g.doorX, g.doorY]
+      ];
+    }
+
+    // Ruangan di koridor bawah (15-20 & 35-40)
+    if (g.sisi === "bawah-kiri" || g.sisi === "bawah-kanan") {
+      return [
+        [liftCenterX, 341],
+        [liftCenterX, bottomCorridorY],
+        [g.doorX, bottomCorridorY],
+        [g.doorX, g.doorY]
+      ];
+    }
+
+    // Ruangan di koridor samping kiri (07-14)
     if (g.sisi === "samping-kiri") {
-      // Sesuai persis dengan ilustrasi rute Ruang 109 pada desain UI/UX:
-      // Turun sedikit dari titik biru -> keluar ke kiri lobi -> naik ke koridor tengah (y=266)
-      // -> lurus ke kiri sampai koridor samping kiri (x=156) -> menuju pintu ruangan
+      if (g.via === "atas") {
+        // Sesuai foto referensi 2: Keluar lift ke atas -> lurus kiri di koridor atas -> belok turun ke koridor samping kiri
+        return [
+          [liftCenterX, 205],
+          [liftCenterX, topCorridorY],
+          [leftCorridorX, topCorridorY],
+          [leftCorridorX, g.doorY],
+          [g.doorX, g.doorY]
+        ];
+      }
+      // 11-14 via koridor bawah
       return [
-        [startX, startY],
-        [startX, 316],
-        [430, 316],
-        [430, 266],
-        [156, 266],
-        [156, g.doorY],
+        [liftCenterX, 341],
+        [liftCenterX, bottomCorridorY],
+        [leftCorridorX, bottomCorridorY],
+        [leftCorridorX, g.doorY],
         [g.doorX, g.doorY]
       ];
     }
-    if (g.sisi === "samping-kanan") {
+
+    // Ruangan di koridor samping kanan (27-34)
+    if (g.via === "atas") {
       return [
-        [startX, startY],
-        [startX, 316],
-        [570, 316],
-        [570, 266],
-        [844, 266],
-        [844, g.doorY],
+        [liftCenterX, 205],
+        [liftCenterX, topCorridorY],
+        [rightCorridorX, topCorridorY],
+        [rightCorridorX, g.doorY],
         [g.doorX, g.doorY]
       ];
     }
-    if (g.sisi === "atas-kiri") {
-      return [
-        [startX, startY],
-        [462, startY],
-        [462, 125],
-        [g.doorX, 125],
-        [g.doorX, g.doorY]
-      ];
-    }
-    if (g.sisi === "atas-kanan") {
-      return [
-        [startX, startY],
-        [538, startY],
-        [538, 125],
-        [g.doorX, 125],
-        [g.doorX, g.doorY]
-      ];
-    }
-    if (g.sisi === "bawah-kiri") {
-      return [
-        [startX, startY],
-        [462, startY],
-        [462, 435],
-        [g.doorX, 435],
-        [g.doorX, g.doorY]
-      ];
-    }
-    // bawah-kanan
     return [
-      [startX, startY],
-      [538, startY],
-      [538, 435],
-      [g.doorX, 435],
+      [liftCenterX, 341],
+      [liftCenterX, bottomCorridorY],
+      [rightCorridorX, bottomCorridorY],
+      [rightCorridorX, g.doorY],
       [g.doorX, g.doorY]
     ];
   }
 
-  /* Susun langkah-langkah Petunjuk Arah sesuai desain UI/UX */
+  /* Susun langkah-langkah Petunjuk Arah sesuai jalur koridor atas/bawah */
   function arahTimeline(kodeRuang) {
     const urut = kodeRuang % 100;
     const g = getRoomGeometry(urut);
     const arahUtama = g.kiri ? "kiri" : "kanan";
-    const panahArah = g.kiri ? "←" : "→";
+    const panahHorizontal = g.kiri ? "←" : "→";
 
+    // Ruangan di koridor samping kiri (07-14) atau kanan (27-34)
     if (g.sisi === "samping-kiri" || g.sisi === "samping-kanan") {
-      const belokKe = g.cy <= 280 ? "kiri" : "kanan";
+      const viaAtas = g.via === "atas";
+      const arahLobi = viaAtas ? "utara (atas)" : "selatan (bawah)";
+      const panahKeluar = viaAtas ? "↑" : "↓";
+      const panahBelok = viaAtas ? "↓" : "↑";
+      const tangan = g.kiri
+        ? (viaAtas ? "kanan" : "kiri")
+        : (viaAtas ? "kiri" : "kanan");
+
       return [
         {
-          icon: "↑",
+          icon: panahKeluar,
           judul: "Keluar dari lift",
-          desc: `Menuju arah ${arahUtama} koridor.`
+          desc: `Menuju lobi ${arahLobi} lalu ambil koridor arah ${arahUtama}.`
         },
         {
-          icon: panahArah,
-          judul: `Lurus sejauh ± ${g.jarakMeter} meter`,
-          desc: "Ikuti koridor hingga mendekati tangga."
+          icon: panahHorizontal,
+          judul: `Lurus di koridor ${viaAtas ? "atas" : "bawah"} (± ${g.jarakMeter} m)`,
+          desc: `Ikuti koridor ke arah ${arahUtama} hingga mendekati tangga pojok.`
         },
         {
-          icon: panahArah,
-          judul: `Belok ${arahUtama}`,
-          desc: `Masuk ke koridor sisi ${arahUtama}.`
+          icon: panahBelok,
+          judul: `Belok ke koridor samping ${arahUtama}`,
+          desc: g.lewat > 0
+            ? `Masuk ke koridor sisi ${arahUtama} dan lewati ${g.lewat} ruangan.`
+            : `Masuk ke koridor sisi ${arahUtama} (ruangan pertama di dekat tangga).`
         },
         {
           icon: "◎",
           isTarget: true,
           judul: `Ruang ${kodeRuang}`,
-          desc: `Berada di sisi ${arahUtama} koridor.`
+          desc: `Berada di sisi ${tangan} Anda pada koridor samping ${arahUtama}.`
         }
       ];
     }
 
-    const koridorPos = g.sisi.startsWith("atas") ? "utara (atas)" : "selatan (bawah)";
+    // Ruangan di koridor atas (01-06, 21-26) atau bawah (15-20, 35-40)
+    const viaAtas = g.via === "atas";
+    const koridorPos = viaAtas ? "atas" : "bawah";
+    const panahKeluar = viaAtas ? "↑" : "↓";
+    const tangan = viaAtas
+      ? (g.kiri ? "kanan" : "kiri")
+      : (g.kiri ? "kiri" : "kanan");
+
     return [
       {
-        icon: "↑",
+        icon: panahKeluar,
         judul: "Keluar dari lift",
-        desc: `Menuju arah ${arahUtama} koridor ${koridorPos}.`
+        desc: `Menuju lobi ${koridorPos} lalu belok ${arahUtama}.`
       },
       {
-        icon: panahArah,
+        icon: panahHorizontal,
         judul: `Lurus sejauh ± ${g.jarakMeter} meter`,
-        desc: `Ikuti koridor ${koridorPos} melewati deretan kelas.`
+        desc: g.lewat > 0
+          ? `Ikuti koridor ${koridorPos} ke arah ${arahUtama} dan lewati ${g.lewat} ruangan.`
+          : `Ruangan berada persis di sebelah lobi lift.`
       },
       {
-        icon: panahArah,
-        judul: `Perhatikan plang nomor ruangan`,
-        desc: `Cari pintu Ruang ${kodeRuang} di sepanjang koridor.`
+        icon: panahHorizontal,
+        judul: "Perhatikan plang nomor ruangan",
+        desc: `Cari pintu Ruang ${kodeRuang} di sisi ${tangan} koridor.`
       },
       {
         icon: "◎",
@@ -278,7 +318,7 @@
     ];
   }
 
-  /* Render SVG Denah Lantai secara lengkap */
+  /* Render SVG Denah Lantai secara lengkap (Tanpa 4 kotak tengah) */
   function gambarDenah() {
     const svg = $("denah");
     if (!svg) return;
@@ -332,10 +372,12 @@
       const pts = buildRoutePoints(urut);
       const ptsStr = pts.map((p) => `${p[0]},${p[1]}`).join(" ");
 
-      // Panah arah di tengah segmen koridor utama
-      const midArrowX = g.kiri ? 290 : 710;
-      const midArrowDir = g.kiri ? "M 296,260 L 284,266 L 296,272 Z" : "M 704,260 L 716,266 L 704,272 Z";
-      const showMidArrow = g.sisi === "samping-kiri" || g.sisi === "samping-kanan";
+      // Panah arah merah di koridor utama (atas atau bawah)
+      const arrowY = g.via === "atas" ? 128 : 432;
+      const midArrowDir = g.kiri
+        ? `M 316,${arrowY - 6} L 304,${arrowY} L 316,${arrowY + 6} Z`
+        : `M 684,${arrowY - 6} L 696,${arrowY} L 684,${arrowY + 6} Z`;
+      const showMidArrow = (g.sisi === "samping-kiri" || g.sisi === "samping-kanan" || g.lewat >= 2);
 
       routeMarkup = `
         <g class="route-layer">
@@ -370,13 +412,7 @@
       <text x="500" y="68" class="svg-lobi-label">LOBI LIFT</text>
       <text x="500" y="498" class="svg-lobi-label">LOBI LIFT</text>
 
-      <!-- 4 Blok Taman/Void Dalam Gedung -->
-      <rect x="190" y="150" width="240" height="104" rx="4" class="svg-inner-court"/>
-      <rect x="190" y="282" width="240" height="126" rx="4" class="svg-inner-court"/>
-      <rect x="570" y="150" width="240" height="104" rx="4" class="svg-inner-court"/>
-      <rect x="570" y="282" width="240" height="126" rx="4" class="svg-inner-court"/>
-
-      <!-- Garis Panah Panduan Koridor (Sesuai Ilustrasi UI/UX) -->
+      <!-- Garis Panah Panduan Koridor -->
       ${renderGuideArrow(395, 118, 225, 118)}
       ${renderGuideArrow(395, 138, 225, 138)}
       ${renderGuideArrow(605, 118, 775, 118)}
@@ -397,14 +433,14 @@
       <!-- 40 Ruangan Lantai Ini -->
       ${roomsMarkup}
 
+      <!-- Rute dari Lift ke Ruangan Tujuan -->
+      ${routeMarkup}
+
       <!-- Kotak LIFT Tengah & Indikator "Anda di sini" -->
       <g filter="url(#liftShadow)">
         <rect x="462" y="205" width="76" height="136" rx="9" fill="var(--lift-fill)" stroke="var(--lift-stroke)" stroke-width="1.5"/>
       </g>
       <text x="500" y="236" fill="#ffffff" font-family="Inter, sans-serif" font-size="13" font-weight="700" text-anchor="middle" letter-spacing="0.06em">LIFT</text>
-
-      <!-- Rute dari Lift ke Ruangan Tujuan -->
-      ${routeMarkup}
 
       <!-- Titik Biru "Anda di sini" -->
       <circle cx="500" cy="282" r="14" class="you-pulse"/>
@@ -541,7 +577,6 @@
   function pilihLantai(lantaiBaru, pilihDefaultRuang) {
     state.lantai = lantaiBaru;
     if (pilihDefaultRuang) {
-      // Jika ruang saat ini bukan di lantai baru, arahkan ke ruang X09 di lantai tersebut
       if (!state.ruang || Math.floor(state.ruang / 100) !== lantaiBaru) {
         state.ruang = lantaiBaru * 100 + 9;
       }
@@ -609,7 +644,6 @@
       }
     }
 
-    // Jika query adalah "909", tampilkan persis urutan seperti desain UI/UX (909, 908, 910, Ruang Lab 9A)
     if (q === "909") {
       return [
         { kode: 909, lantai: 9, judul: "Ruang 909", sub: "Lantai 9", prioritas: 0 },

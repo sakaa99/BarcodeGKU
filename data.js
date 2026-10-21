@@ -15,7 +15,7 @@ const GKU = {
   kampus: "Telkom University",
   jumlahLantai: 10,
   ruangPerLantai: 40,
-  baseUrl: "https://tel-u.ac.id/denah-gku",
+  baseUrl: "https://sakaa99.github.io/BarcodeGKU/",
 
   /* Nama khusus atau kategori ruangan sesuai dengan fitur pencarian populer & saran UI/UX */
   namaRuang: {
