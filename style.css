@@ -1420,3 +1420,177 @@ body.dark-mode .sw.lift { background: #3b82f6; }
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ===== Riwayat Pencarian & Ruangan Favorit ===== */
+.saved-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+}
+
+.saved-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.saved-item .search-result-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.saved-remove {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.saved-remove:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.saved-empty {
+  margin: auto 0;
+  padding: 20px 8px;
+  text-align: center;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.saved-empty strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.88rem;
+  color: var(--ink-strong);
+}
+
+.sc-action {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.sc-action:hover {
+  text-decoration: underline;
+}
+
+/* Tombol bintang favorit di kartu tujuan */
+.fav-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.fav-btn:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.fav-btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.fav-btn[aria-pressed="true"] svg {
+  fill: currentColor;
+}
+
+/* ===== Denah revisi: WC pojok, label rentang, lift pilihan ===== */
+.svg-wc-pria { fill: #2f6fe0; }
+.svg-wc-wanita { fill: #e8479a; }
+
+.svg-wc-text {
+  font: 800 14px 'Inter', sans-serif;
+  fill: #ffffff;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.svg-zone-label {
+  font: 800 34px 'Inter', sans-serif;
+  fill: var(--ink-strong);
+  opacity: 0.85;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  letter-spacing: 0.01em;
+}
+
+.lift-pick {
+  cursor: pointer;
+  outline: none;
+}
+
+.lift-pick:hover rect:first-of-type,
+.lift-pick:focus-visible rect:first-of-type {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+/* Pemilih titik awal di panel petunjuk */
+.origin-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.origin-chip {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink-strong);
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.origin-chip:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.origin-chip.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.origin-hint {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.sw.wc-pria { background: #2f6fe0; }
+.sw.wc-wanita { background: #e8479a; }

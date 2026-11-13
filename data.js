@@ -13,11 +13,13 @@
 const GKU = {
   nama: "Gedung Kuliah Umum (GKU)",
   kampus: "Telkom University",
-  jumlahLantai: 10,
+  jumlahLantai: 11,
   ruangPerLantai: 40,
   baseUrl: "https://sakaa99.github.io/BarcodeGKU/",
 
-  /* Nama khusus atau kategori ruangan sesuai dengan fitur pencarian populer & saran UI/UX */
+  /* TODO(data): isi di bawah ini MASIH CONTOH. Ganti dengan nama ruangan asli
+     hasil survei GKU sebelum dipakai sungguhan. Ruangan yang tidak tercantum
+     otomatis tampil sebagai "Ruang <nomor>". */
   namaRuang: {
     "101": "Ruang Kelas 101",
     "105": "Ruang Administrasi GKU",

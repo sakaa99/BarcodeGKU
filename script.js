@@ -12,24 +12,80 @@
     lantai: 1,
     ruang: 109, // Default sesuai tampilan utama desain UI/UX (Ruang 109, Lantai 1)
     zoom: 1,
-    darkMode: false
+    darkMode: false,
+    asal: "tengah", // titik awal rute: "tengah" | "kiri" | "kanan"
+    riwayat: [], // kode ruangan terakhir dicari/dipilih (terbaru di depan)
+    favorit: []  // kode ruangan yang dibintangi
   };
+
+  /* ---------- Titik awal (lift) ----------
+     tengah = lift di lobi tengah.
+     kiri / kanan = lift di pojok bawah, bersebelahan dengan WC wanita. */
+  const ASAL = {
+    tengah: { label: "Lift Tengah", sub: "Lobi lift tengah", x: 500, y: 282 },
+    kiri: { label: "Lift Kiri-Bawah", sub: "Samping WC wanita (pojok kiri bawah)", x: 97.5, y: 495 },
+    kanan: { label: "Lift Kanan-Bawah", sub: "Samping WC wanita (pojok kanan bawah)", x: 902.5, y: 495 }
+  };
+
+  function asalValid(nilai) {
+    return typeof nilai === "string" && Object.prototype.hasOwnProperty.call(ASAL, nilai);
+  }
+
+  function buatUrlDenah() {
+    const p = [`lantai=${state.lantai}`];
+    if (state.ruang) p.push(`ruang=${state.ruang}`);
+    if (state.asal !== "tengah") p.push(`dari=${state.asal}`);
+    return `${GKU.baseUrl}?${p.join("&")}`;
+  }
+
+  /* ---------- Penyimpanan lokal (riwayat & favorit) ---------- */
+  const KUNCI_RIWAYAT = "gku.riwayat.v1";
+  const KUNCI_FAVORIT = "gku.favorit.v1";
+  const MAKS_RIWAYAT = 6;
+  const MAKS_FAVORIT = 12;
+
+  function bacaDaftar(kunci) {
+    try {
+      const arr = JSON.parse(window.localStorage.getItem(kunci) || "[]");
+      return Array.isArray(arr) ? arr.filter((k) => parseKodeRuang(k)) : [];
+    } catch (err) {
+      return []; // storage diblokir / data rusak -> mulai kosong
+    }
+  }
+
+  function simpanDaftar(kunci, daftar) {
+    try {
+      window.localStorage.setItem(kunci, JSON.stringify(daftar));
+    } catch (err) {
+      /* Abaikan: fitur tetap jalan untuk sesi ini saja */
+    }
+  }
+
+  /* Satu-satunya validasi kode ruangan: kode = lantai x 100 + nomor urut.
+     Mengembalikan { lantai, urut } bila valid, selain itu null. */
+  function parseKodeRuang(nilai) {
+    const kode = typeof nilai === "number" ? nilai : parseInt(nilai, 10);
+    if (!Number.isInteger(kode)) return null;
+    const lantai = Math.floor(kode / 100);
+    const urut = kode % 100;
+    if (lantai < 1 || lantai > GKU.jumlahLantai) return null;
+    if (urut < 1 || urut > GKU.ruangPerLantai) return null;
+    return { lantai, urut };
+  }
 
   /* Baca parameter URL ?lantai=...&ruang=... jika dibuka dari hasil scan QR */
   function initFromUrl() {
     try {
       const params = new URLSearchParams(window.location.search);
-      const lParam = parseInt(params.get("lantai"), 10);
-      const rParam = parseInt(params.get("ruang"), 10);
-      if (rParam >= 101 && rParam <= 1040) {
-        const l = Math.floor(rParam / 100);
-        const u = rParam % 100;
-        if (l >= 1 && l <= GKU.jumlahLantai && u >= 1 && u <= GKU.ruangPerLantai) {
-          state.lantai = l;
-          state.ruang = rParam;
-          return;
-        }
+      const dari = params.get("dari");
+      if (asalValid(dari)) state.asal = dari;
+      const ruang = parseKodeRuang(params.get("ruang"));
+      if (ruang) {
+        state.lantai = ruang.lantai;
+        state.ruang = ruang.lantai * 100 + ruang.urut;
+        return;
       }
+      const lParam = parseInt(params.get("lantai"), 10);
       if (lParam >= 1 && lParam <= GKU.jumlahLantai) {
         state.lantai = lParam;
         state.ruang = lParam * 100 + 9;
@@ -58,8 +114,7 @@
         sisi: "atas-kiri",
         via: "atas",
         kiri: true,
-        lewat,
-        jarakMeter: 4 + urut * 2
+        lewat
       };
     }
     // 07-14: Samping Kiri (07 paling atas, 14 paling bawah)
@@ -80,8 +135,7 @@
         sisi: "samping-kiri",
         via: viaAtas ? "atas" : "bawah",
         kiri: true,
-        lewat,
-        jarakMeter: 18 + lewat * 3
+        lewat
       };
     }
     // 15-20: Bawah Kiri (15 dekat Tangga Kiri Bawah, 20 dekat Lobi Lift)
@@ -101,8 +155,7 @@
         sisi: "bawah-kiri",
         via: "bawah",
         kiri: true,
-        lewat,
-        jarakMeter: 4 + (lewat + 1) * 2
+        lewat
       };
     }
     // 21-26: Atas Kanan (21 dekat Lobi Lift, 26 dekat Tangga Kanan Atas)
@@ -122,8 +175,7 @@
         sisi: "atas-kanan",
         via: "atas",
         kiri: false,
-        lewat,
-        jarakMeter: 4 + (idx + 1) * 2
+        lewat
       };
     }
     // 27-34: Samping Kanan (27 paling atas, 34 paling bawah)
@@ -144,8 +196,7 @@
         sisi: "samping-kanan",
         via: viaAtas ? "atas" : "bawah",
         kiri: false,
-        lewat,
-        jarakMeter: 18 + lewat * 3
+        lewat
       };
     }
     // 35-40: Bawah Kanan (40 dekat Lobi Lift, 35 dekat Tangga Kanan Bawah)
@@ -164,8 +215,7 @@
       sisi: "bawah-kanan",
       via: "bawah",
       kiri: false,
-      lewat,
-      jarakMeter: 4 + (idxFromRight + 1) * 2
+      lewat
     };
   }
 
@@ -239,6 +289,180 @@
     ];
   }
 
+  /* ---------- Rute dari lift pojok (graf koridor) ----------
+     Koridor membentuk cincin: atas (y=128), bawah (y=432), kiri (x=160), kanan (x=840).
+     Simpul = persimpangan. Rute = jalur terpendek di cincin, lalu masuk ke pintu ruangan. */
+  const SIMPUL = {
+    TL: [160, 128], TC: [500, 128], TR: [840, 128],
+    BL: [160, 432], BC: [500, 432], BR: [840, 432]
+  };
+  const RUAS = [
+    ["TL", "TC", "atas"], ["TC", "TR", "atas"],
+    ["BL", "BC", "bawah"], ["BC", "BR", "bawah"],
+    ["TL", "BL", "kiri"], ["TR", "BR", "kanan"]
+  ];
+  const AWAL_LIFT = {
+    kiri: { simpul: "BL", pintu: [[97.5, 495], [97.5, 455], [160, 455]] },
+    kanan: { simpul: "BR", pintu: [[902.5, 495], [902.5, 455], [840, 455]] }
+  };
+  const jarakManhattan = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+
+  function jalurTerpendek(dari, ke) {
+    const dist = {};
+    const prev = {};
+    const belum = new Set(Object.keys(SIMPUL));
+    belum.forEach((k) => { dist[k] = Infinity; });
+    dist[dari] = 0;
+    while (belum.size) {
+      let u = null;
+      belum.forEach((k) => { if (u === null || dist[k] < dist[u]) u = k; });
+      belum.delete(u);
+      RUAS.forEach(([a, b]) => {
+        const v = a === u ? b : (b === u ? a : null);
+        if (!v) return;
+        const d = dist[u] + jarakManhattan(SIMPUL[a], SIMPUL[b]);
+        if (d < dist[v]) { dist[v] = d; prev[v] = u; }
+      });
+    }
+    const path = [ke];
+    while (path[0] !== dari) path.unshift(prev[path[0]]);
+    return { path, jarak: dist[ke] };
+  }
+
+  /* Titik tempat pintu ruangan "menempel" ke koridor + ruas koridor yang dipakainya */
+  function titikTempel(g) {
+    if (g.sisi === "atas-kiri") return { a: [g.doorX, 128], ruas: ["TL", "TC"] };
+    if (g.sisi === "atas-kanan") return { a: [g.doorX, 128], ruas: ["TC", "TR"] };
+    if (g.sisi === "bawah-kiri") return { a: [g.doorX, 432], ruas: ["BL", "BC"] };
+    if (g.sisi === "bawah-kanan") return { a: [g.doorX, 432], ruas: ["BC", "BR"] };
+    if (g.sisi === "samping-kiri") return { a: [160, g.doorY], ruas: ["TL", "BL"] };
+    return { a: [840, g.doorY], ruas: ["TR", "BR"] };
+  }
+
+  function namaRuas(a, b) {
+    const r = RUAS.find(([p, q]) => (p === a && q === b) || (p === b && q === a));
+    return r ? r[2] : "atas";
+  }
+
+  function arahGerak(dari, ke) {
+    const dx = ke[0] - dari[0];
+    const dy = ke[1] - dari[1];
+    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "→" : "←";
+    return dy >= 0 ? "↓" : "↑";
+  }
+
+  /* Hitung rute dari lift pojok ("kiri"/"kanan") ke ruangan: { points, moves } */
+  function hitungRuteDariPojok(urut, asal) {
+    const g = getRoomGeometry(urut);
+    const awal = AWAL_LIFT[asal];
+    const { a, ruas } = titikTempel(g);
+
+    let terbaik = null;
+    ruas.forEach((ujung) => {
+      const j = jalurTerpendek(awal.simpul, ujung);
+      const total = j.jarak + jarakManhattan(SIMPUL[ujung], a);
+      if (!terbaik || total < terbaik.total) terbaik = { total, path: j.path, ujung };
+    });
+
+    const koordinat = terbaik.path.map((k) => SIMPUL[k]);
+    const points = [...awal.pintu, ...koordinat];
+    const moves = [];
+    for (let i = 1; i < terbaik.path.length; i++) {
+      moves.push({
+        kor: namaRuas(terbaik.path[i - 1], terbaik.path[i]),
+        arah: arahGerak(SIMPUL[terbaik.path[i - 1]], SIMPUL[terbaik.path[i]]),
+        dari: SIMPUL[terbaik.path[i - 1]],
+        ke: SIMPUL[terbaik.path[i]]
+      });
+    }
+    if (jarakManhattan(SIMPUL[terbaik.ujung], a) > 0.5) {
+      points.push(a);
+      moves.push({
+        kor: namaRuas(ruas[0], ruas[1]),
+        arah: arahGerak(SIMPUL[terbaik.ujung], a),
+        dari: SIMPUL[terbaik.ujung],
+        ke: a,
+        terakhir: true
+      });
+    }
+    points.push([g.doorX, g.doorY]);
+    const arahPintu = arahGerak(a, [g.doorX, g.doorY]);
+
+    // buang titik kembar berurutan
+    const bersih = points.filter((p, i) => i === 0 || p[0] !== points[i - 1][0] || p[1] !== points[i - 1][1]);
+    return { points: bersih, moves, arahPintu, g };
+  }
+
+  const NAMA_KORIDOR = {
+    atas: "koridor atas",
+    bawah: "koridor bawah",
+    kiri: "koridor samping kiri",
+    kanan: "koridor samping kanan"
+  };
+  const KATA_ARAH = { "→": "ke kanan", "←": "ke kiri", "↑": "ke atas (utara)", "↓": "ke bawah (selatan)" };
+  const KATA_SISI = { "→": "kanan", "←": "kiri", "↑": "atas", "↓": "bawah" };
+  const NAMA_SISI_RUANG = {
+    "atas-kiri": "koridor atas sisi kiri",
+    "atas-kanan": "koridor atas sisi kanan",
+    "bawah-kiri": "koridor bawah sisi kiri",
+    "bawah-kanan": "koridor bawah sisi kanan",
+    "samping-kiri": "koridor samping kiri",
+    "samping-kanan": "koridor samping kanan"
+  };
+
+  /* Petunjuk teks untuk rute dari lift pojok */
+  function arahTimelineDariPojok(kodeRuang, asal) {
+    const urut = kodeRuang % 100;
+    const { moves, arahPintu, g } = hitungRuteDariPojok(urut, asal);
+    const sisiLift = asal === "kiri" ? "kiri" : "kanan";
+
+    // gabungkan gerakan berurutan yang searah di koridor yang sama
+    const gabung = [];
+    moves.forEach((m) => {
+      const akhir = gabung[gabung.length - 1];
+      if (akhir && akhir.kor === m.kor && akhir.arah === m.arah) {
+        akhir.ke = m.ke;
+        akhir.terakhir = akhir.terakhir || m.terakhir;
+      } else {
+        gabung.push({ ...m });
+      }
+    });
+
+    const langkah = [{
+      icon: asal === "kiri" ? "↗" : "↖",
+      judul: `Keluar dari ${ASAL[asal].label}`,
+      desc: `Lift pojok ${sisiLift}-bawah, di samping WC wanita. Menuju persimpangan koridor ${sisiLift} dan koridor bawah.`
+    }];
+
+    gabung.forEach((m) => {
+      const melewatiLobi = (m.kor === "atas" || m.kor === "bawah") &&
+        Math.min(m.dari[0], m.ke[0]) < 500 && Math.max(m.dari[0], m.ke[0]) > 500;
+      let desc = m.terakhir
+        ? `Terus sampai sejajar dengan pintu Ruang ${kodeRuang}.`
+        : "Ikuti koridor sampai persimpangan berikutnya.";
+      if (melewatiLobi) desc = `Anda akan melewati lobi lift tengah. ${desc}`;
+      langkah.push({
+        icon: m.arah,
+        judul: `Lurus ${KATA_ARAH[m.arah]} di ${NAMA_KORIDOR[m.kor]}`,
+        desc
+      });
+    });
+
+    langkah.push({
+      icon: "◎",
+      isTarget: true,
+      judul: `Ruang ${kodeRuang}`,
+      desc: `Pintu ada di sisi ${KATA_SISI[arahPintu]} koridor (${NAMA_SISI_RUANG[g.sisi]}).`
+    });
+    return langkah;
+  }
+
+  /* Titik-titik rute sesuai titik awal yang dipilih */
+  function buatRute(urut, asal) {
+    if (asal === "kiri" || asal === "kanan") return hitungRuteDariPojok(urut, asal).points;
+    return buildRoutePoints(urut);
+  }
+
   /* Susun langkah-langkah Petunjuk Arah sesuai jalur koridor atas/bawah */
   function arahTimeline(kodeRuang) {
     const urut = kodeRuang % 100;
@@ -264,7 +488,7 @@
         },
         {
           icon: panahHorizontal,
-          judul: `Lurus di koridor ${viaAtas ? "atas" : "bawah"} (± ${g.jarakMeter} m)`,
+          judul: `Lurus di koridor ${viaAtas ? "atas" : "bawah"}`,
           desc: `Ikuti koridor ke arah ${arahUtama} hingga mendekati tangga pojok.`
         },
         {
@@ -299,7 +523,7 @@
       },
       {
         icon: panahHorizontal,
-        judul: `Lurus sejauh ± ${g.jarakMeter} meter`,
+        judul: g.lewat > 0 ? `Lurus, lewati ${g.lewat} ruangan` : "Lurus sedikit saja",
         desc: g.lewat > 0
           ? `Ikuti koridor ${koridorPos} ke arah ${arahUtama} dan lewati ${g.lewat} ruangan.`
           : `Ruangan berada persis di sebelah lobi lift.`
@@ -348,6 +572,49 @@
       return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--arrow-guide)" stroke-width="1.3" marker-end="url(#guideArrowHead)" opacity="0.75"/>`;
     }
 
+    // Badge WC di pojok bingkai gedung
+    function renderWC(x, y, jenis) {
+      const nama = jenis === "pria" ? "Toilet Pria" : "Toilet Wanita";
+      return `
+        <g class="wc-badge" role="img" aria-label="${nama}">
+          <title>${nama}</title>
+          <rect x="${x}" y="${y}" width="46" height="32" rx="4" class="svg-wc-${jenis}"/>
+          <text x="${x + 23}" y="${y + 16}" class="svg-wc-text">WC</text>
+        </g>
+      `;
+    }
+
+    // Titik penanda "Anda di sini" (titik biru berdenyut + label) di dalam kotak lift
+    function renderPosisiAnda(cx, cy, labelY, lebar, kecil) {
+      const r = kecil ? 5.5 : 9.5;
+      const tinggi = kecil ? 14 : 20;
+      return `
+        <circle cx="${cx}" cy="${cy}" r="${kecil ? 9 : 14}" class="you-pulse" style="transform-origin:${cx}px ${cy}px"/>
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--you-fill)" stroke="#ffffff" stroke-width="${kecil ? 2 : 3}"/>
+        <rect x="${cx - lebar / 2}" y="${labelY}" width="${lebar}" height="${tinggi}" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+        <text x="${cx}" y="${labelY + (kecil ? 10 : 14)}" fill="#ffffff" font-family="Inter, sans-serif" font-size="${kecil ? 8 : 9.5}" font-weight="600" text-anchor="middle">Anda di sini</text>
+      `;
+    }
+
+    // Satu kotak lift yang bisa diklik untuk memilih titik awal
+    function renderLift(kunci, x, y, w, h) {
+      const aktif = state.asal === kunci;
+      const cx = x + w / 2;
+      const cy = kunci === "tengah" ? 282 : y + 29;
+      const pusat = kunci === "tengah"
+        ? renderPosisiAnda(cx, cy, 304, 68)
+        : renderPosisiAnda(cx, cy, y + h - 19, 54, true);
+      return `
+        <g class="lift-pick ${aktif ? "active" : ""}" data-asal="${kunci}" role="button" tabindex="0"
+           aria-pressed="${aktif}" aria-label="Mulai dari ${ASAL[kunci].label}">
+          <title>${ASAL[kunci].label} – ${ASAL[kunci].sub}</title>
+          <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="9" fill="var(--lift-fill)" stroke="var(--lift-stroke)" stroke-width="1.5"/>
+          <text x="${cx}" y="${y + (kunci === "tengah" ? 31 : 15)}" fill="#ffffff" font-family="Inter, sans-serif" font-size="${kunci === "tengah" ? 13 : 9.5}" font-weight="700" text-anchor="middle" letter-spacing="0.06em">LIFT</text>
+          ${aktif ? pusat : `<circle cx="${cx}" cy="${cy}" r="${kunci === "tengah" ? 10 : 7}" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.7"/><circle cx="${cx}" cy="${cy}" r="${kunci === "tengah" ? 3.5 : 2.5}" fill="#ffffff" opacity="0.7"/>`}
+        </g>
+      `;
+    }
+
     // Bangun elemen ruangan 01..40
     let roomsMarkup = "";
     for (let u = 1; u <= GKU.ruangPerLantai; u++) {
@@ -369,7 +636,7 @@
     if (state.ruang && Math.floor(state.ruang / 100) === lantai) {
       const urut = state.ruang % 100;
       const g = getRoomGeometry(urut);
-      const pts = buildRoutePoints(urut);
+      const pts = buatRute(urut, state.asal);
       const ptsStr = pts.map((p) => `${p[0]},${p[1]}`).join(" ");
 
       // Panah arah merah di koridor utama (atas atau bawah)
@@ -377,7 +644,7 @@
       const midArrowDir = g.kiri
         ? `M 316,${arrowY - 6} L 304,${arrowY} L 316,${arrowY + 6} Z`
         : `M 684,${arrowY - 6} L 696,${arrowY} L 684,${arrowY + 6} Z`;
-      const showMidArrow = (g.sisi === "samping-kiri" || g.sisi === "samping-kanan" || g.lewat >= 2);
+      const showMidArrow = state.asal === "tengah" && (g.sisi === "samping-kiri" || g.sisi === "samping-kanan" || g.lewat >= 2);
 
       routeMarkup = `
         <g class="route-layer">
@@ -404,13 +671,12 @@
       </defs>
 
       <!-- Bingkai Gedung Luar -->
-      <rect x="42" y="22" width="916" height="516" rx="6" class="svg-outer-border"/>
-      <rect x="48" y="28" width="904" height="504" rx="4" fill="none" stroke="var(--room-stroke)" stroke-width="1"/>
+      <rect x="42" y="22" width="916" height="516" rx="16" class="svg-outer-border"/>
+      <rect x="48" y="28" width="904" height="504" rx="12" fill="none" stroke="var(--room-stroke)" stroke-width="1"/>
 
       <!-- Area Lobi Lift Tengah -->
       <rect x="445" y="30" width="110" height="500" class="svg-lobi-zone"/>
       <text x="500" y="68" class="svg-lobi-label">LOBI LIFT</text>
-      <text x="500" y="498" class="svg-lobi-label">LOBI LIFT</text>
 
       <!-- Garis Panah Panduan Koridor -->
       ${renderGuideArrow(395, 118, 225, 118)}
@@ -430,24 +696,38 @@
       ${renderStair(50, 460, 95, 70)}
       ${renderStair(855, 460, 95, 70)}
 
+      <!-- Toilet di 4 pojok: biru = pria (atas), merah muda = wanita (bawah) -->
+      ${renderWC(4, 14, "pria")}
+      ${renderWC(950, 14, "pria")}
+      ${renderWC(4, 514, "wanita")}
+      ${renderWC(950, 514, "wanita")}
+
+      <!-- Label rentang nomor ruangan -->
+      <text x="290" y="288" class="svg-zone-label">← ${lantai * 100 + 1}-${lantai * 100 + 20}</text>
+      <text x="710" y="288" class="svg-zone-label">${lantai * 100 + 21}-${lantai * 100 + 40} →</text>
+
       <!-- 40 Ruangan Lantai Ini -->
       ${roomsMarkup}
 
       <!-- Rute dari Lift ke Ruangan Tujuan -->
       ${routeMarkup}
 
-      <!-- Kotak LIFT Tengah & Indikator "Anda di sini" -->
+      <!-- Tiga lift: tengah, dan dua lift pojok bawah (samping WC wanita) -->
       <g filter="url(#liftShadow)">
-        <rect x="462" y="205" width="76" height="136" rx="9" fill="var(--lift-fill)" stroke="var(--lift-stroke)" stroke-width="1.5"/>
+        ${renderLift("tengah", 462, 205, 76, 136)}
       </g>
-      <text x="500" y="236" fill="#ffffff" font-family="Inter, sans-serif" font-size="13" font-weight="700" text-anchor="middle" letter-spacing="0.06em">LIFT</text>
-
-      <!-- Titik Biru "Anda di sini" -->
-      <circle cx="500" cy="282" r="14" class="you-pulse"/>
-      <circle cx="500" cy="282" r="9.5" fill="var(--you-fill)" stroke="#ffffff" stroke-width="3"/>
-      <rect x="454" y="304" width="92" height="24" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
-      <text x="500" y="320" fill="#ffffff" font-family="Inter, sans-serif" font-size="10.5" font-weight="600" text-anchor="middle">Anda di sini</text>
+      ${renderLift("kiri", 66.5, 464, 62, 58)}
+      ${renderLift("kanan", 871.5, 464, 62, 58)}
     `;
+
+    // Klik lift = pilih titik awal
+    svg.querySelectorAll(".lift-pick").forEach((node) => {
+      const pilih = () => setAsal(node.getAttribute("data-asal"));
+      node.addEventListener("click", pilih);
+      node.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pilih(); }
+      });
+    });
 
     // Pasang event listener klik pada setiap ruangan di SVG
     svg.querySelectorAll(".room-group").forEach((node) => {
@@ -492,7 +772,7 @@
       ? `Ruang ${kode} (${namaKhusus})`
       : `Ruang ${kode}`;
 
-    const langkahRute = arahTimeline(kode);
+    const langkahRute = state.asal === "tengah" ? arahTimeline(kode) : arahTimelineDariPojok(kode, state.asal);
     const timelineHtml = langkahRute.map((step, idx) => `
       <div class="tl-item">
         <div class="tl-badge">${idx + 1}</div>
@@ -516,6 +796,12 @@
           <div class="meta-title">${labelRuang}</div>
           <div class="meta-sub">Lantai ${lantai}</div>
         </div>
+        <button type="button" id="btnFavorit" class="fav-btn" aria-pressed="${adaFavorit(kode)}"
+                aria-label="Simpan Ruang ${kode} ke favorit" title="Simpan ke favorit">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+            <path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z"/>
+          </svg>
+        </button>
       </div>
 
       <div class="origin-row">
@@ -527,8 +813,15 @@
         </div>
         <div class="origin-text">
           <div class="meta-label">Mulai dari</div>
-          <div class="meta-title">Lift (Lobi Tengah)</div>
-          <div class="meta-sub">Anda berada di lantai ${lantai}</div>
+          <div class="meta-title">${ASAL[state.asal].label}</div>
+          <div class="meta-sub">${ASAL[state.asal].sub} • Lantai ${lantai}</div>
+          <div class="origin-switch" role="radiogroup" aria-label="Pilih titik awal">
+            ${["kiri", "tengah", "kanan"].map((k) => `
+              <button type="button" role="radio" class="origin-chip ${state.asal === k ? "active" : ""}"
+                      data-asal="${k}" aria-checked="${state.asal === k}">${ASAL[k].label.replace("Lift ", "")}</button>
+            `).join("")}
+          </div>
+          <div class="origin-hint">Datang lewat lift samping WC wanita? Pilih Kiri-Bawah atau Kanan-Bawah.</div>
         </div>
       </div>
 
@@ -540,6 +833,13 @@
         Cari Ruangan Lain
       </button>
     `;
+
+    pContent.querySelectorAll(".origin-chip").forEach((chip) => {
+      chip.addEventListener("click", () => setAsal(chip.getAttribute("data-asal")));
+    });
+
+    const btnFavorit = $("btnFavorit");
+    if (btnFavorit) btnFavorit.addEventListener("click", () => toggleFavorit(kode));
 
     const btnCariLain = $("btnCariLain");
     if (btnCariLain) {
@@ -573,6 +873,15 @@
     }
   }
 
+  /* Ganti titik awal rute (lift tengah / lift pojok kiri / lift pojok kanan) */
+  function setAsal(asal) {
+    if (!asalValid(asal) || asal === state.asal) return;
+    state.asal = asal;
+    gambarDenah();
+    tampilPanel();
+    showToast(`Titik awal: ${ASAL[asal].label}`);
+  }
+
   /* Pilih Lantai */
   function pilihLantai(lantaiBaru, pilihDefaultRuang) {
     state.lantai = lantaiBaru;
@@ -588,13 +897,11 @@
   }
 
   /* Pilih Ruangan Tertentu */
-  function pilihRuang(kodeRuang) {
-    const l = Math.floor(kodeRuang / 100);
-    const u = kodeRuang % 100;
-    if (l < 1 || l > GKU.jumlahLantai || u < 1 || u > GKU.ruangPerLantai) {
-      return false;
-    }
-    state.lantai = l;
+  function pilihRuang(kodeRuang, catat = true) {
+    const valid = parseKodeRuang(kodeRuang);
+    if (!valid) return false;
+    if (catat) catatRiwayat(kodeRuang);
+    state.lantai = valid.lantai;
     state.ruang = kodeRuang;
     renderTabs();
     gambarDenah();
@@ -603,58 +910,184 @@
     return true;
   }
 
+  /* ---------- Riwayat Pencarian ---------- */
+  function catatRiwayat(kode) {
+    state.riwayat = [kode, ...state.riwayat.filter((k) => k !== kode)].slice(0, MAKS_RIWAYAT);
+    simpanDaftar(KUNCI_RIWAYAT, state.riwayat);
+    renderRiwayat();
+  }
+
+  /* ---------- Ruangan Favorit ---------- */
+  function adaFavorit(kode) {
+    return state.favorit.includes(kode);
+  }
+
+  function toggleFavorit(kode) {
+    if (adaFavorit(kode)) {
+      state.favorit = state.favorit.filter((k) => k !== kode);
+      showToast(`Ruang ${kode} dihapus dari favorit`);
+    } else {
+      if (state.favorit.length >= MAKS_FAVORIT) {
+        showToast(`Favorit penuh (maks. ${MAKS_FAVORIT}). Hapus salah satu dulu.`);
+        return;
+      }
+      state.favorit = [kode, ...state.favorit];
+      showToast(`Ruang ${kode} disimpan ke favorit`);
+    }
+    simpanDaftar(KUNCI_FAVORIT, state.favorit);
+    renderFavorit();
+    const btn = $("btnFavorit");
+    if (btn) btn.setAttribute("aria-pressed", String(adaFavorit(kode)));
+  }
+
+  /* Render satu daftar tersimpan (dipakai kartu Riwayat dan Favorit) */
+  function renderDaftarTersimpan(elId, daftar, kosongJudul, kosongTeks, onHapus) {
+    const el = $(elId);
+    if (!el) return;
+    if (daftar.length === 0) {
+      el.innerHTML = `<div class="saved-empty"><strong>${kosongJudul}</strong>${kosongTeks}</div>`;
+      return;
+    }
+    el.innerHTML = daftar.map((kode) => {
+      const item = buatHasil(kode, 0);
+      return `
+        <div class="saved-item">
+          <button type="button" class="search-result-item ${kode === state.ruang ? "active" : ""}" data-room="${kode}">
+            <svg class="res-pin" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/>
+            </svg>
+            <div>
+              <span class="res-title">${item.judul}</span>
+              <span class="res-sub">${item.sub}</span>
+            </div>
+          </button>
+          <button type="button" class="saved-remove" data-hapus="${kode}" aria-label="Hapus Ruang ${kode}" title="Hapus">&times;</button>
+        </div>`;
+    }).join("");
+
+    el.querySelectorAll(".search-result-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const kode = parseInt(btn.getAttribute("data-room"), 10);
+        pilihRuang(kode);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        showToast(`Menampilkan rute ke Ruang ${kode} (Lantai ${Math.floor(kode / 100)})`);
+      });
+    });
+    el.querySelectorAll(".saved-remove").forEach((btn) => {
+      btn.addEventListener("click", () => onHapus(parseInt(btn.getAttribute("data-hapus"), 10)));
+    });
+  }
+
+  function renderRiwayat() {
+    renderDaftarTersimpan(
+      "riwayatList", state.riwayat,
+      "Belum ada riwayat",
+      "Ruangan yang kamu cari atau klik akan muncul di sini.",
+      (kode) => {
+        state.riwayat = state.riwayat.filter((k) => k !== kode);
+        simpanDaftar(KUNCI_RIWAYAT, state.riwayat);
+        renderRiwayat();
+      }
+    );
+    const btn = $("btnHapusRiwayat");
+    if (btn) btn.hidden = state.riwayat.length === 0;
+  }
+
+  function renderFavorit() {
+    renderDaftarTersimpan(
+      "favoritList", state.favorit,
+      "Belum ada favorit",
+      "Tekan ikon bintang di kartu tujuan untuk menyimpan ruangan yang sering kamu datangi.",
+      (kode) => {
+        state.favorit = state.favorit.filter((k) => k !== kode);
+        simpanDaftar(KUNCI_FAVORIT, state.favorit);
+        renderFavorit();
+        const btn = $("btnFavorit");
+        if (btn && state.ruang === kode) btn.setAttribute("aria-pressed", "false");
+      }
+    );
+    const btn = $("btnHapusFavorit");
+    if (btn) btn.hidden = state.favorit.length === 0;
+  }
+
   /* Highlight chip pencarian populer yang aktif */
   function updateChipHighlight() {
+    document.querySelectorAll(".saved-list .search-result-item").forEach((btn) => {
+      btn.classList.toggle("active", parseInt(btn.getAttribute("data-room"), 10) === state.ruang);
+    });
     document.querySelectorAll(".chip[data-room]").forEach((chip) => {
       const r = parseInt(chip.getAttribute("data-room"), 10);
       chip.classList.toggle("active", r === state.ruang);
     });
   }
 
-  /* Sistem Pencarian Ruangan (Mendukung Nomor & Nama Ruangan) */
+  /* Normalisasi teks pencarian: huruf kecil, spasi ganda dirapikan,
+     dan awalan "ruang"/"r" dibuang supaya "Ruang 909", "r909", "909" sama. */
+  function normalisasi(teks) {
+    return String(teks || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function labelRuang(kode) {
+    return GKU.namaRuang[String(kode)] || `Ruang ${kode}`;
+  }
+
+  function buatHasil(kode, prioritas) {
+    const lantai = Math.floor(kode / 100);
+    const nama = GKU.namaRuang[String(kode)];
+    const adaNama = nama && nama !== `Ruang ${kode}`;
+    return {
+      kode,
+      lantai,
+      judul: adaNama && !nama.startsWith("Ruang Kelas") ? nama : `Ruang ${kode}`,
+      sub: adaNama ? `Lantai ${lantai} • ${nama}` : `Lantai ${lantai}`,
+      prioritas
+    };
+  }
+
+  /* Sistem Pencarian Ruangan (nomor & nama).
+     - Tidak peduli huruf besar/kecil dan spasi ganda.
+     - Kata kunci banyak kata dicocokkan tanpa peduli urutan ("lab komputer" = "komputer lab").
+     - Jika query persis sebuah nomor ruangan, ruangan di sebelahnya ikut disarankan. */
   function cariDaftarRuangan(rawQuery) {
-    const q = (rawQuery || "").trim().toLowerCase();
+    const q = normalisasi(rawQuery).replace(/^(ruang|r)\s*(?=\d)/, "");
     if (!q) return [];
+    const tokens = q.split(" ");
 
     const hasil = [];
     for (let l = 1; l <= GKU.jumlahLantai; l++) {
       for (let u = 1; u <= GKU.ruangPerLantai; u++) {
         const kode = l * 100 + u;
         const kodeStr = String(kode);
-        const namaKhusus = GKU.namaRuang[kodeStr] || "";
-        const labelTampil = namaKhusus || `Ruang ${kodeStr}`;
+        const nama = normalisasi(labelRuang(kode));
+        const target = `${kodeStr} ${nama}`;
 
-        const cocokKode = kodeStr.includes(q);
-        const cocokNama = labelTampil.toLowerCase().includes(q) || `ruang ${kodeStr}`.includes(q);
+        if (!tokens.every((t) => target.includes(t))) continue;
 
-        if (cocokKode || cocokNama) {
-          let prioritas = 3;
-          if (kodeStr === q || labelTampil.toLowerCase() === q) prioritas = 0;
-          else if (kodeStr.startsWith(q)) prioritas = 1;
-          else if (namaKhusus.toLowerCase().includes(q)) prioritas = 2;
-
-          hasil.push({
-            kode,
-            lantai: l,
-            judul: namaKhusus && !namaKhusus.startsWith("Ruang Kelas") ? namaKhusus : `Ruang ${kode}`,
-            sub: namaKhusus && namaKhusus !== `Ruang ${kode}` ? `Lantai ${l} • ${namaKhusus}` : `Lantai ${l}`,
-            prioritas
-          });
-        }
+        let prioritas = 3;
+        if (kodeStr === q || nama === q) prioritas = 0;
+        else if (kodeStr.startsWith(q)) prioritas = 1;
+        else if (GKU.namaRuang[kodeStr] && nama.includes(q)) prioritas = 2;
+        hasil.push(buatHasil(kode, prioritas));
       }
     }
 
-    if (q === "909") {
-      return [
-        { kode: 909, lantai: 9, judul: "Ruang 909", sub: "Lantai 9", prioritas: 0 },
-        { kode: 908, lantai: 9, judul: "Ruang 908", sub: "Lantai 9", prioritas: 1 },
-        { kode: 910, lantai: 9, judul: "Ruang 910", sub: "Lantai 9", prioritas: 1 },
-        { kode: 911, lantai: 9, judul: "Ruang Lab 9A", sub: "Lantai 9", prioritas: 2 }
-      ];
-    }
-
     hasil.sort((a, b) => a.prioritas - b.prioritas || a.kode - b.kode);
-    return hasil.slice(0, 6);
+    const unggulan = hasil.slice(0, 6);
+
+    // Query = nomor ruangan persis: tambahkan ruangan di kiri/kanannya sebagai saran.
+    const persis = parseKodeRuang(q);
+    if (persis && /^\d+$/.test(q)) {
+      const kode = parseInt(q, 10);
+      [kode - 1, kode + 1].forEach((tetangga) => {
+        if (parseKodeRuang(tetangga) && !unggulan.some((h) => h.kode === tetangga)) {
+          unggulan.push(buatHasil(tetangga, 1));
+        }
+      });
+    }
+    return unggulan.slice(0, 6);
   }
 
   /* Render Dropdown Hasil Pencarian / State Tidak Ditemukan */
@@ -751,7 +1184,7 @@
     const qrUrlEl = $("qrUrl");
     if (!modal || !qrBox || !qrUrlEl) return;
 
-    const url = `${GKU.baseUrl}?lantai=${state.lantai}${state.ruang ? `&ruang=${state.ruang}` : ""}`;
+    const url = buatUrlDenah();
     qrUrlEl.textContent = url;
     qrBox.innerHTML = "";
 
@@ -832,7 +1265,10 @@
     if (dataUrl) {
       const a = document.createElement("a");
       a.href = dataUrl;
-      a.download = `QR-Denah-GKU-Lantai-${state.lantai}.png`;
+      const akhiran = state.asal !== "tengah" ? `-dari-${state.asal}` : "";
+      a.download = state.ruang
+        ? `QR-GKU-Ruang-${state.ruang}${akhiran}.png`
+        : `QR-GKU-Lantai-${state.lantai}${akhiran}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -966,7 +1402,7 @@
     }
     if (btnBackPanel) {
       btnBackPanel.addEventListener("click", () => {
-        pilihRuang(state.lantai * 100 + 9);
+        pilihRuang(state.lantai * 100 + 9, false);
       });
     }
 
@@ -984,15 +1420,27 @@
       });
     }
 
-    // Item Hasil Pencarian di Kartu Showcase Bawah
-    document.querySelectorAll(".showcase-search-item[data-room]").forEach((item) => {
-      item.addEventListener("click", () => {
-        const kode = parseInt(item.getAttribute("data-room"), 10);
-        pilihRuang(kode);
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        showToast(`Menampilkan rute ke Ruang ${kode} (Lantai ${Math.floor(kode / 100)})`);
+    // Hapus semua riwayat / favorit
+    const btnHapusRiwayat = $("btnHapusRiwayat");
+    const btnHapusFavorit = $("btnHapusFavorit");
+    if (btnHapusRiwayat) {
+      btnHapusRiwayat.addEventListener("click", () => {
+        state.riwayat = [];
+        simpanDaftar(KUNCI_RIWAYAT, state.riwayat);
+        renderRiwayat();
+        showToast("Riwayat pencarian dihapus");
       });
-    });
+    }
+    if (btnHapusFavorit) {
+      btnHapusFavorit.addEventListener("click", () => {
+        state.favorit = [];
+        simpanDaftar(KUNCI_FAVORIT, state.favorit);
+        renderFavorit();
+        const btn = $("btnFavorit");
+        if (btn) btn.setAttribute("aria-pressed", "false");
+        showToast("Semua favorit dihapus");
+      });
+    }
 
     // Modal QR Code
     const btnQR = $("btnQR");
@@ -1028,7 +1476,7 @@
     }
     if (btnShowcaseCopy) {
       btnShowcaseCopy.addEventListener("click", () => {
-        salinKeClipboard(`${GKU.baseUrl}?lantai=${state.lantai}`);
+        salinKeClipboard(buatUrlDenah());
       });
     }
     if (btnShowcaseDownload) {
@@ -1038,11 +1486,15 @@
 
   /* Jalankan Saat DOM Siap */
   function init() {
+    state.riwayat = bacaDaftar(KUNCI_RIWAYAT);
+    state.favorit = bacaDaftar(KUNCI_FAVORIT);
     initFromUrl();
     renderTabs();
     gambarDenah();
     tampilPanel();
     updateChipHighlight();
+    renderRiwayat();
+    renderFavorit();
     initEvents();
   }
 
